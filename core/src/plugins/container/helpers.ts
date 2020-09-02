@@ -30,6 +30,7 @@ import isUrl from "is-url"
 import titleize from "titleize"
 import { stripQuotes } from "../../util/string"
 import { PluginContext } from "../../plugin-context"
+import { ModuleVersion } from "../../vcs/vcs"
 
 interface DockerVersion {
   client?: string
@@ -57,14 +58,14 @@ const helpers = {
    * Returns the image ID used locally, when building and deploying to local environments
    * (when we don't need to push to remote registries).
    */
-  async getLocalImageId(module: ContainerModule): Promise<string> {
-    const hasDockerfile = await helpers.hasDockerfile(module)
+  async getLocalImageId(config: ContainerModuleConfig, version: ModuleVersion): Promise<string> {
+    const hasDockerfile = await helpers.hasDockerfile(config, version)
 
-    if (module.spec.image && !hasDockerfile) {
-      return module.spec.image
+    if (config.spec.image && !hasDockerfile) {
+      return config.spec.image
     } else {
-      const { versionString } = module.version
-      const name = await helpers.getLocalImageName(module)
+      const { versionString } = version
+      const name = await helpers.getLocalImageName(config)
       const parsedImage = helpers.parseImageId(name)
       return helpers.unparseImageId({ ...parsedImage, tag: versionString })
     }
@@ -103,7 +104,7 @@ const helpers = {
         return `${imageName}:${versionString}`
       }
     } else {
-      return helpers.getLocalImageId(module)
+      return helpers.getLocalImageId(module, module.version)
     }
   },
 
@@ -137,21 +138,25 @@ const helpers = {
    * set as the tag.
    */
   // Requiring 2nd parameter to avoid accidentally missing it
-  async getDeploymentImageId(module: ContainerModule, registryConfig: ContainerRegistryConfig | undefined) {
-    if (await helpers.hasDockerfile(module)) {
+  async getDeploymentImageId(
+    moduleConfig: ContainerModuleConfig,
+    version: ModuleVersion,
+    registryConfig: ContainerRegistryConfig | undefined
+  ) {
+    if (await helpers.hasDockerfile(moduleConfig, version)) {
       // If building, return the deployment image name, with the current module version.
-      const imageName = await helpers.getDeploymentImageName(module, registryConfig)
+      const imageName = await helpers.getDeploymentImageName(moduleConfig, registryConfig)
 
       return helpers.unparseImageId({
         repository: imageName,
-        tag: module.version.versionString,
+        tag: version.versionString,
       })
-    } else if (module.spec.image) {
+    } else if (moduleConfig.spec.image) {
       // Otherwise, return the configured image ID.
-      return module.spec.image
+      return moduleConfig.spec.image
     } else {
-      throw new ConfigurationError(`Module ${module.name} neither specifies image nor provides Dockerfile`, {
-        spec: module.spec,
+      throw new ConfigurationError(`Module ${moduleConfig.name} neither specifies image nor provides Dockerfile`, {
+        spec: moduleConfig.spec,
       })
     }
   },
@@ -220,7 +225,7 @@ const helpers = {
   },
 
   async imageExistsLocally(module: ContainerModule, log: LogEntry, ctx: PluginContext) {
-    const identifier = await helpers.getLocalImageId(module)
+    const identifier = await helpers.getLocalImageId(module, module.version)
     const result = await helpers.dockerCli({
       cwd: module.buildPath,
       args: ["images", identifier, "-q"],
@@ -313,11 +318,11 @@ const helpers = {
     }
   },
 
-  async hasDockerfile(module: ContainerModule): Promise<boolean> {
+  async hasDockerfile(config: ContainerModuleConfig, version: ModuleVersion): Promise<boolean> {
     // If we explicitly set a Dockerfile, we take that to mean you want it to be built.
     // If the file turns out to be missing, this will come up in the build handler.
-    const dockerfileSourcePath = helpers.getDockerfileSourcePath(module)
-    return !!module.spec.dockerfile || module.version.files.includes(dockerfileSourcePath)
+    const dockerfileSourcePath = helpers.getDockerfileSourcePath(config)
+    return !!config.spec.dockerfile || version.files.includes(dockerfileSourcePath)
   },
 
   getDockerfileBuildPath(module: ContainerModule) {

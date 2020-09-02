@@ -11,12 +11,12 @@ import { PublishModuleParams } from "../../types/plugin/module/publishModule"
 import { containerHelpers } from "./helpers"
 
 export async function publishContainerModule({ ctx, module, log }: PublishModuleParams<ContainerModule>) {
-  if (!(await containerHelpers.hasDockerfile(module))) {
+  if (!(await containerHelpers.hasDockerfile(module, module.version))) {
     log.setState({ msg: `Nothing to publish` })
     return { published: false }
   }
 
-  const localId = await containerHelpers.getLocalImageId(module)
+  const localId = await containerHelpers.getLocalImageId(module, module.version)
   const remoteId = await containerHelpers.getPublicImageId(module)
 
   log.setState({ msg: `Publishing image ${remoteId}...` })

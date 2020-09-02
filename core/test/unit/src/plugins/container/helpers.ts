@@ -24,6 +24,7 @@ import { ContainerModuleSpec, ContainerModuleConfig } from "../../../../../src/p
 import { containerHelpers as helpers, DEFAULT_BUILD_TIMEOUT } from "../../../../../src/plugins/container/helpers"
 import { DEFAULT_API_VERSION } from "../../../../../src/constants"
 import { dedent } from "../../../../../src/util/string"
+import { ModuleVersion } from "../../../../../src/vcs/vcs"
 
 describe("containerHelpers", () => {
   const projectRoot = resolve(dataDir, "test-project-container")
@@ -41,7 +42,6 @@ describe("containerHelpers", () => {
     },
     disabled: false,
     name: "test",
-    outputs: {},
     path: modulePath,
     type: "container",
 
@@ -62,6 +62,12 @@ describe("containerHelpers", () => {
     testConfigs: [],
   }
 
+  const dummyVersion: ModuleVersion = {
+    versionString: "1234",
+    dependencyVersions: {},
+    files: [],
+  }
+
   let garden: Garden
   let ctx: PluginContext
   let log: LogEntry
@@ -73,61 +79,54 @@ describe("containerHelpers", () => {
     ctx = await garden.getPluginContext(provider)
 
     td.replace(garden.buildDir, "syncDependencyProducts", () => null)
-
-    td.replace(Garden.prototype, "resolveVersion", async () => ({
-      versionString: "1234",
-      dependencyVersions: {},
-      files: [],
-    }))
+    td.replace(Garden.prototype, "resolveVersion", async () => dummyVersion)
   })
 
   async function getTestModule(moduleConfig: ContainerModuleConfig) {
     const parsed = await configure({ ctx, moduleConfig, log })
-    return moduleFromConfig(garden, parsed.moduleConfig, [])
+    return moduleFromConfig(garden, log, parsed.moduleConfig, [])
   }
 
   describe("getLocalImageId", () => {
     it("should return configured image name with local version if module has a Dockerfile", async () => {
       const config = cloneDeep(baseConfig)
       config.spec.image = "some/image:1.1"
-      const module = await getTestModule(config)
 
       td.replace(helpers, "hasDockerfile", async () => true)
 
-      expect(await helpers.getLocalImageId(module)).to.equal("some/image:1234")
+      expect(await helpers.getLocalImageId(config, dummyVersion)).to.equal("some/image:1234")
     })
 
     it("should return configured image name and tag if module has no Dockerfile and name includes tag", async () => {
       const config = cloneDeep(baseConfig)
       config.spec.image = "some/image:1.1"
-      const module = await getTestModule(config)
 
       td.replace(helpers, "hasDockerfile", async () => false)
 
-      expect(await helpers.getLocalImageId(module)).to.equal("some/image:1.1")
+      expect(await helpers.getLocalImageId(config, dummyVersion)).to.equal("some/image:1.1")
     })
 
     it("should return module name with local version if there is a Dockerfile and no configured name", async () => {
       const config = cloneDeep(baseConfig)
-      const module = await getTestModule(config)
 
       td.replace(helpers, "hasDockerfile", async () => true)
 
-      expect(await helpers.getLocalImageId(module)).to.equal("test:1234")
+      expect(await helpers.getLocalImageId(config, dummyVersion)).to.equal("test:1234")
     })
 
     it("should return module name with local version if there is no Dockerfile and no configured name", async () => {
       const config = cloneDeep(baseConfig)
-      const module = await getTestModule(config)
 
       td.replace(helpers, "hasDockerfile", async () => false)
 
-      expect(await helpers.getLocalImageId(module)).to.equal("test:1234")
+      expect(await helpers.getLocalImageId(config, dummyVersion)).to.equal("test:1234")
     })
   })
 
   describe("getLocalImageName", () => {
     it("should return configured image name with no version if specified", async () => {
+      td.replace(helpers, "hasDockerfile", async () => false)
+
       const config = cloneDeep(baseConfig)
       config.spec.image = "some/image:1.1"
       const module = await getTestModule(config)
@@ -136,6 +135,8 @@ describe("containerHelpers", () => {
     })
 
     it("should return module name if no image name is specified", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const config = cloneDeep(baseConfig)
       const module = await getTestModule(config)
 
@@ -145,49 +146,50 @@ describe("containerHelpers", () => {
 
   describe("getDeploymentImageId", () => {
     it("should return module name with module version if there is a Dockerfile and no image name set", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const config = cloneDeep(baseConfig)
       const module = await getTestModule(config)
 
-      td.replace(helpers, "hasDockerfile", async () => true)
-
-      expect(await helpers.getDeploymentImageId(module, undefined)).to.equal("test:1234")
+      expect(await helpers.getDeploymentImageId(config, module.version, undefined)).to.equal("test:1234")
     })
 
     it("should return image name with module version if there is a Dockerfile and image name is set", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const config = cloneDeep(baseConfig)
       config.spec.image = "some/image:1.1"
       const module = await getTestModule(config)
 
-      td.replace(helpers, "hasDockerfile", async () => true)
-
-      expect(await helpers.getDeploymentImageId(module, undefined)).to.equal("some/image:1234")
+      expect(await helpers.getDeploymentImageId(module, module.version, undefined)).to.equal("some/image:1234")
     })
 
     it("should return configured image tag if there is no Dockerfile", async () => {
+      td.replace(helpers, "hasDockerfile", async () => false)
+
       const config = cloneDeep(baseConfig)
       config.spec.image = "some/image:1.1"
       const module = await getTestModule(config)
 
-      td.replace(helpers, "hasDockerfile", async () => false)
-
-      expect(await helpers.getDeploymentImageId(module, undefined)).to.equal("some/image:1.1")
+      expect(await helpers.getDeploymentImageId(module, module.version, undefined)).to.equal("some/image:1.1")
     })
 
     it("should throw if no image name is set and there is no Dockerfile", async () => {
       const config = cloneDeep(baseConfig)
-      const module = await getTestModule(config)
 
       td.replace(helpers, "hasDockerfile", async () => false)
 
-      await expectError(() => helpers.getDeploymentImageId(module, undefined), "configuration")
+      await expectError(() => helpers.getDeploymentImageId(config, dummyVersion, undefined), "configuration")
     })
   })
 
   describe("getDockerfileBuildPath", () => {
     it("should return the absolute default Dockerfile path", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const module = await getTestModule(baseConfig)
 
-      const path = await helpers.getDockerfileBuildPath(module)
+      const path = helpers.getDockerfileBuildPath(module)
       expect(path).to.equal(join(module.buildPath, "Dockerfile"))
     })
 
@@ -196,16 +198,18 @@ describe("containerHelpers", () => {
       config.spec.dockerfile = relDockerfilePath
       const module = await getTestModule(config)
 
-      const path = await helpers.getDockerfileBuildPath(module)
+      const path = helpers.getDockerfileBuildPath(module)
       expect(path).to.equal(join(module.buildPath, relDockerfilePath))
     })
   })
 
   describe("getDockerfileSourcePath", () => {
     it("should return the absolute default Dockerfile path", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const module = await getTestModule(baseConfig)
 
-      const path = await helpers.getDockerfileSourcePath(module)
+      const path = helpers.getDockerfileSourcePath(module)
       expect(path).to.equal(join(module.path, "Dockerfile"))
     })
 
@@ -214,7 +218,7 @@ describe("containerHelpers", () => {
       config.spec.dockerfile = relDockerfilePath
       const module = await getTestModule(config)
 
-      const path = await helpers.getDockerfileSourcePath(module)
+      const path = helpers.getDockerfileSourcePath(module)
       expect(path).to.equal(join(module.path, relDockerfilePath))
     })
   })
@@ -237,7 +241,6 @@ describe("containerHelpers", () => {
         },
         disabled: false,
         name: "test",
-        outputs: {},
         path: modulePath,
         type: "container",
 
@@ -263,6 +266,8 @@ describe("containerHelpers", () => {
     })
 
     it("should use local id if no image name is set", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const module = await getTestModule(baseConfig)
 
       td.replace(helpers, "getLocalImageId", async () => "test:1234")
@@ -273,7 +278,7 @@ describe("containerHelpers", () => {
 
   describe("getDockerfilePathFromConfig", () => {
     it("should return the absolute default Dockerfile path", async () => {
-      const path = await helpers.getDockerfileSourcePath(baseConfig)
+      const path = helpers.getDockerfileSourcePath(baseConfig)
       expect(path).to.equal(join(baseConfig.path, "Dockerfile"))
     })
 
@@ -281,7 +286,7 @@ describe("containerHelpers", () => {
       const config = cloneDeep(baseConfig)
       config.spec.dockerfile = relDockerfilePath
 
-      const path = await helpers.getDockerfileSourcePath(config)
+      const path = helpers.getDockerfileSourcePath(config)
       expect(path).to.equal(join(config.path, relDockerfilePath))
     })
   })
@@ -393,31 +398,36 @@ describe("containerHelpers", () => {
 
   describe("hasDockerfile", () => {
     it("should return true if module config explicitly sets a Dockerfile", async () => {
+      td.replace(helpers, "hasDockerfile", async () => true)
+
       const graph = await garden.getConfigGraph(garden.log)
       const module = graph.getModule("module-a")
+
       module.spec.dockerfile = "Dockerfile"
-      expect(await helpers.hasDockerfile(module)).to.be.true
+
+      td.reset()
+      expect(await helpers.hasDockerfile(module, module.version)).to.be.true
     })
 
     it("should return true if module sources include a Dockerfile", async () => {
-      const graph = await garden.getConfigGraph(garden.log)
-      const module = graph.getModule("module-a")
+      const config = (await garden.getRawModuleConfigs(["module-a"]))[0]
+      const dockerfilePath = join(garden.projectRoot, "module-a", "Dockerfile")
 
-      const dockerfilePath = join(module.path, "Dockerfile")
-      module.version.files.push(dockerfilePath)
+      const version = cloneDeep(dummyVersion)
+      version.files = [dockerfilePath]
+
       td.replace(helpers, "getDockerfileSourcePath", () => dockerfilePath)
 
-      expect(await helpers.hasDockerfile(module)).to.be.true
+      expect(await helpers.hasDockerfile(config, version)).to.be.true
     })
 
     it("should return false if no Dockerfile is specified or included in sources", async () => {
-      const graph = await garden.getConfigGraph(garden.log)
-      const module = graph.getModule("module-a")
+      const config = (await garden.getRawModuleConfigs(["module-a"]))[0]
+      const dockerfilePath = join(garden.projectRoot, "module-a", "Dockerfile")
 
-      const dockerfilePath = join(module.path, "Dockerfile")
       td.replace(helpers, "getDockerfileSourcePath", () => dockerfilePath)
 
-      expect(await helpers.hasDockerfile(module)).to.be.false
+      expect(await helpers.hasDockerfile(config, dummyVersion)).to.be.false
     })
   })
 
@@ -437,7 +447,6 @@ describe("containerHelpers", () => {
         disabled: false,
         name: "test",
         path: tmpDir.path,
-        outputs: {},
         serviceConfigs: [],
         spec: {
           build: { dependencies: [], timeout: 999 },
