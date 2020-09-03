@@ -206,12 +206,18 @@ tasks:
     # `GARDEN`) and values must be primitives or references to secrets.
     env: {}
 
-    # Specify artifacts to copy out of the container after the task is complete.
+    #
+    #   Specify artifacts to copy out of the container after the run. The artifacts are stored locally under
+    #   the `.garden/artifacts` directory.
+    #
     artifacts:
       - # A POSIX-style path or glob to copy. Must be an absolute path. May contain wildcards.
         source:
 
-        # A POSIX-style path to copy the artifacts to, relative to the project artifacts directory.
+        #
+        #   A POSIX-style path to copy the artifacts to, relative to the project artifacts directory at
+        # `.garden/artifacts`.
+        #
         target: .
 
 tests:
@@ -255,12 +261,18 @@ tests:
     # `GARDEN`) and values must be primitives or references to secrets.
     env: {}
 
-    # Specify artifacts to copy out of the container after the test is complete.
+    #
+    #   Specify artifacts to copy out of the container after the run. The artifacts are stored locally under
+    #   the `.garden/artifacts` directory.
+    #
     artifacts:
       - # A POSIX-style path or glob to copy. Must be an absolute path. May contain wildcards.
         source:
 
-        # A POSIX-style path to copy the artifacts to, relative to the project artifacts directory.
+        #
+        #   A POSIX-style path to copy the artifacts to, relative to the project artifacts directory at
+        # `.garden/artifacts`.
+        #
         target: .
 ```
 
@@ -746,7 +758,10 @@ tasks:
 
 [tasks](#tasks) > artifacts
 
-Specify artifacts to copy out of the container after the task is complete.
+
+  Specify artifacts to copy out of the container after the run. The artifacts are stored locally under
+  the `.garden/artifacts` directory.
+
 
 | Type            | Default | Required |
 | --------------- | ------- | -------- |
@@ -774,7 +789,9 @@ tasks:
 
 [tasks](#tasks) > [artifacts](#tasksartifacts) > target
 
-A POSIX-style path to copy the artifacts to, relative to the project artifacts directory.
+
+  A POSIX-style path to copy the artifacts to, relative to the project artifacts directory at `.garden/artifacts`.
+
 
 | Type        | Default | Required |
 | ----------- | ------- | -------- |
@@ -942,7 +959,10 @@ tests:
 
 [tests](#tests) > artifacts
 
-Specify artifacts to copy out of the container after the test is complete.
+
+  Specify artifacts to copy out of the container after the run. The artifacts are stored locally under
+  the `.garden/artifacts` directory.
+
 
 | Type            | Default | Required |
 | --------------- | ------- | -------- |
@@ -970,7 +990,9 @@ tests:
 
 [tests](#tests) > [artifacts](#testsartifacts) > target
 
-A POSIX-style path to copy the artifacts to, relative to the project artifacts directory.
+
+  A POSIX-style path to copy the artifacts to, relative to the project artifacts directory at `.garden/artifacts`.
+
 
 | Type        | Default | Required |
 | ----------- | ------- | -------- |

@@ -427,6 +427,15 @@ export const containerRegistryConfigSchema = () =>
 
 export interface ContainerService extends Service<ContainerModule> {}
 
+export const artifactsDescription = `
+  Specify artifacts to copy out of the container after the run. The artifacts are stored locally under
+  the \`.garden/artifacts\` directory.
+`
+
+export const artifactsTargetDescription = `
+  A POSIX-style path to copy the artifacts to, relative to the project artifacts directory at \`.garden/artifacts\`.
+`
+
 export const containerArtifactSchema = () =>
   joi.object().keys({
     source: joi
@@ -441,7 +450,7 @@ export const containerArtifactSchema = () =>
       .relativeOnly()
       .subPathOnly()
       .default(".")
-      .description("A POSIX-style path to copy the artifacts to, relative to the project artifacts directory.")
+      .description(artifactsTargetDescription)
       .example("outputs/foo/"),
   })
 
@@ -451,7 +460,7 @@ const artifactsSchema = () =>
     .items(containerArtifactSchema())
     .description(
       deline`
-      Specify artifacts to copy out of the container after the run.
+      ${artifactsDescription}\n
 
       Note: Depending on the provider, this may require the container image to include \`sh\` \`tar\`, in order
       to enable the file transfer.
